@@ -1,4 +1,6 @@
 from torch.utils.data.distributed import DistributedSampler
+
+
 def create_sampler(dataset, shuffle, cfg):
     """
     Create sampler for the given dataset.

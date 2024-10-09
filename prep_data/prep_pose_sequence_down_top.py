@@ -1,9 +1,11 @@
-import os
-import numpy as np
-from queue import PriorityQueue
-from tqdm import tqdm
 import copy
+import os
+from queue import PriorityQueue
+
+import numpy as np
 import torch
+from tqdm import tqdm
+
 
 def qrot(q, v):
     """
@@ -15,29 +17,33 @@ def qrot(q, v):
     assert q.shape[-1] == 4
     assert v.shape[-1] == 3
     assert q.shape[:-1] == v.shape[:-1]
-    
+
     original_shape = list(v.shape)
     q = q.view(-1, 4)
     v = v.view(-1, 3)
-    
+
     qvec = q[:, 1:]
     uv = torch.cross(qvec, v, dim=1)
     uuv = torch.cross(qvec, uv, dim=1)
     return (v + 2 * (q[:, :1] * uv + uuv)).view(original_shape)
+
+
 def process_file(file_path, pc_path):
     # Load the data from the .npy file
     cur_data = np.load(pc_path, allow_pickle=True).item()
-    cur_pts = cur_data['part_pcs']
-    class_index = cur_data['part_ids']
+    cur_pts = cur_data["part_pcs"]
+    class_index = cur_data["part_ids"]
     num_point = cur_pts.shape[1]
-    poses = cur_data['part_poses']
+    poses = cur_data["part_poses"]
     quat = poses[:, 3:]
     center = poses[:, :3]
     gt_pts = copy.copy(cur_pts)
     for i in range(len(cur_pts)):
-        gt_pts[i] = qrot(torch.from_numpy(quat[i]).unsqueeze(0).repeat(num_point,1).unsqueeze(0), torch.from_numpy(cur_pts[i]).unsqueeze(0))
+        gt_pts[i] = qrot(
+            torch.from_numpy(quat[i]).unsqueeze(0).repeat(num_point, 1).unsqueeze(0),
+            torch.from_numpy(cur_pts[i]).unsqueeze(0),
+        )
         gt_pts[i] = gt_pts[i] + center[i]
-
 
     # originals
     num_parts = cur_pts.shape[0]
@@ -58,6 +64,7 @@ def process_file(file_path, pc_path):
             visited.add(current_part)
             parts_sequence.append(current_part)
     return parts_sequence
+
 
 input_folder = "./shape_data"
 pcc_path = "./shape_data"
@@ -80,6 +87,6 @@ for filename in tqdm(os.listdir(input_folder)):
             with open(output_path, "w") as f:
                 f.write(" ".join(map(str, parts_sequence)))
         except:
-            print('filename error: ', filename)
+            print("filename error: ", filename)
     else:
         continue

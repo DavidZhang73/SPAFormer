@@ -5,14 +5,15 @@
 
 import copy
 import math
-import numpy as np
 import os
 import pickle
 from collections import OrderedDict
-import torch
-from iopath.common.file_io import g_pathmgr
+
+import numpy as np
 import slowfast.utils.distributed as du
 import slowfast.utils.logging as logging
+import torch
+from iopath.common.file_io import g_pathmgr
 from slowfast.utils.c2_model_loading import get_name_convert_func
 from slowfast.utils.env import checkpoint_pathmgr as pathmgr
 
@@ -52,9 +53,9 @@ def get_path_to_checkpoint(path_to_job, epoch, task=""):
         epoch (int): the number of epoch for the checkpoint.
     """
     if task != "":
-        name = "{}_checkpoint_epoch_{:05d}.pyth".format(task, epoch)
+        name = f"{task}_checkpoint_epoch_{epoch:05d}.pyth"
     else:
-        name = "checkpoint_epoch_{:05d}.pyth".format(epoch)
+        name = f"checkpoint_epoch_{epoch:05d}.pyth"
     return os.path.join(get_checkpoint_dir(path_to_job), name)
 
 
@@ -68,7 +69,7 @@ def get_last_checkpoint(path_to_job):
     d = get_checkpoint_dir(path_to_job)
     names = g_pathmgr.ls(d) if g_pathmgr.exists(d) else []
     names = [f for f in names if "checkpt" in f]
-    assert len(names), "No checkpoints found in '{}'.".format(d)
+    assert len(names), f"No checkpoints found in '{d}'."
     # Sort the checkpoints by epoch.
     name = sorted(names)[-1]
     return os.path.join(d, name)
@@ -99,9 +100,7 @@ def is_checkpoint_epoch(cfg, cur_epoch, multigrid_schedule=None):
         prev_epoch = 0
         for s in multigrid_schedule:
             if cur_epoch < s[-1]:
-                period = max(
-                    (s[-1] - prev_epoch) // cfg.MULTIGRID.EVAL_FREQ + 1, 1
-                )
+                period = max((s[-1] - prev_epoch) // cfg.MULTIGRID.EVAL_FREQ + 1, 1)
                 return (s[-1] - 1 - cur_epoch) % period == 0
             prev_epoch = s[-1]
 
@@ -137,9 +136,7 @@ def save_checkpoint(path_to_job, model, optimizer, epoch, cfg, scaler=None):
     if scaler is not None:
         checkpoint["scaler_state"] = scaler.state_dict()
     # Write the checkpoint.
-    path_to_checkpoint = get_path_to_checkpoint(
-        path_to_job, epoch + 1
-    )
+    path_to_checkpoint = get_path_to_checkpoint(path_to_job, epoch + 1)
     with pathmgr.open(path_to_checkpoint, "wb") as f:
         torch.save(checkpoint, f)
     return path_to_checkpoint
@@ -163,23 +160,15 @@ def inflate_weight(state_dict_2d, state_dict_3d):
         v3d = state_dict_3d[k]
         # Inflate the weight of 2D conv to 3D conv.
         if len(v2d.shape) == 4 and len(v3d.shape) == 5:
-            logger.info(
-                "Inflate {}: {} -> {}: {}".format(k, v2d.shape, k, v3d.shape)
-            )
+            logger.info(f"Inflate {k}: {v2d.shape} -> {k}: {v3d.shape}")
             # Dimension need to be match.
             assert v2d.shape[-2:] == v3d.shape[-2:]
             assert v2d.shape[:2] == v3d.shape[:2]
-            v3d = (
-                v2d.unsqueeze(2).repeat(1, 1, v3d.shape[2], 1, 1) / v3d.shape[2]
-            )
+            v3d = v2d.unsqueeze(2).repeat(1, 1, v3d.shape[2], 1, 1) / v3d.shape[2]
         elif v2d.shape == v3d.shape:
             v3d = v2d
         else:
-            logger.info(
-                "Unexpected {}: {} -|> {}: {}".format(
-                    k, v2d.shape, k, v3d.shape
-                )
-            )
+            logger.info(f"Unexpected {k}: {v2d.shape} -|> {k}: {v3d.shape}")
         state_dict_inflated[k] = v3d.clone()
     return state_dict_inflated
 
@@ -195,7 +184,7 @@ def load_checkpoint(
     epoch_reset=False,
     clear_name_pattern=(),
     image_init=False,
-    change_model_keys=False
+    change_model_keys=False,
 ):
     """
     Load the checkpoint from the given file. If inflation is True, inflate the
@@ -216,7 +205,7 @@ def load_checkpoint(
     Returns:
         (int): the number of training epoch of the checkpoint.
     """
-    logger.info("Loading network weights from {}.".format(path_to_checkpoint))
+    logger.info(f"Loading network weights from {path_to_checkpoint}.")
 
     # Account for the DDP wrapper in the multi-gpu setting.
     ms = model.module if data_parallel else model
@@ -224,17 +213,11 @@ def load_checkpoint(
     # Load the checkpoint on CPU to avoid GPU mem spike.
     with pathmgr.open(path_to_checkpoint, "rb") as f:
         checkpoint = torch.load(f, map_location="cpu")
-    model_state_dict_3d = (
-        model.module.state_dict() if data_parallel else model.state_dict()
-    )
-    checkpoint["model_state"] = normal_to_sub_bn(
-        checkpoint["model_state"], model_state_dict_3d
-    )
+    model_state_dict_3d = model.module.state_dict() if data_parallel else model.state_dict()
+    checkpoint["model_state"] = normal_to_sub_bn(checkpoint["model_state"], model_state_dict_3d)
     if inflation:
         # Try to inflate the model.
-        inflated_model_dict = inflate_weight(
-            checkpoint["model_state"], model_state_dict_3d
-        )
+        inflated_model_dict = inflate_weight(checkpoint["model_state"], model_state_dict_3d)
         ms.load_state_dict(inflated_model_dict, strict=False)
     else:
         if clear_name_pattern:
@@ -242,95 +225,58 @@ def load_checkpoint(
                 model_state_dict_new = OrderedDict()
                 for k in checkpoint["model_state"]:
                     if item in k:
-                        k_re = k.replace(
-                            item, "", 1
-                        )  # only repace first occurence of pattern
-                        model_state_dict_new[k_re] = checkpoint[
-                            "model_state"
-                        ][k]
-                        logger.info("renaming: {} -> {}".format(k, k_re))
+                        k_re = k.replace(item, "", 1)  # only repace first occurence of pattern
+                        model_state_dict_new[k_re] = checkpoint["model_state"][k]
+                        logger.info(f"renaming: {k} -> {k_re}")
                     else:
-                        model_state_dict_new[k] = checkpoint["model_state"][
-                            k
-                        ]
+                        model_state_dict_new[k] = checkpoint["model_state"][k]
                 checkpoint["model_state"] = model_state_dict_new
 
         pre_train_dict = checkpoint["model_state"]
         model_dict = ms.state_dict()
 
         if image_init:
-            if (
-                "pos_embed" in pre_train_dict.keys()
-                and "pos_embed_xy" in model_dict.keys()
-            ):
+            if "pos_embed" in pre_train_dict.keys() and "pos_embed_xy" in model_dict.keys():
                 print(
                     pre_train_dict["pos_embed"].shape,
                     model_dict["pos_embed_xy"].shape,
                     model_dict["pos_embed_class"].shape,
                 )
-                if (
-                    pre_train_dict["pos_embed"].shape[1]
-                    == model_dict["pos_embed_xy"].shape[1] + 1
-                ):
-                    pre_train_dict["pos_embed_xy"] = pre_train_dict[
-                        "pos_embed"
-                    ][:, 1:]
-                    pre_train_dict["pos_embed_class"] = pre_train_dict[
-                        "pos_embed"
-                    ][:, :1]
+                if pre_train_dict["pos_embed"].shape[1] == model_dict["pos_embed_xy"].shape[1] + 1:
+                    pre_train_dict["pos_embed_xy"] = pre_train_dict["pos_embed"][:, 1:]
+                    pre_train_dict["pos_embed_class"] = pre_train_dict["pos_embed"][:, :1]
 
-            if (
-                "patch_embed.proj.weight" in pre_train_dict.keys()
-                and "patch_embed.proj.weight" in model_dict.keys()
-            ):
+            if "patch_embed.proj.weight" in pre_train_dict.keys() and "patch_embed.proj.weight" in model_dict.keys():
                 print(
                     pre_train_dict["patch_embed.proj.weight"].shape,
                     model_dict["patch_embed.proj.weight"].shape,
                 )
                 if (
-                    len(pre_train_dict["patch_embed.proj.weight"].shape)
-                    == 4
-                    and len(model_dict["patch_embed.proj.weight"].shape)
-                    == 5
+                    len(pre_train_dict["patch_embed.proj.weight"].shape) == 4
+                    and len(model_dict["patch_embed.proj.weight"].shape) == 5
                 ):  # img->video
                     t = model_dict["patch_embed.proj.weight"].shape[2]
-                    pre_train_dict[
-                        "patch_embed.proj.weight"
-                    ] = pre_train_dict["patch_embed.proj.weight"][
+                    pre_train_dict["patch_embed.proj.weight"] = pre_train_dict["patch_embed.proj.weight"][
                         :, :, None, :, :
-                    ].repeat(
-                        1, 1, t, 1, 1
-                    )
-                    logger.info(
-                        f"inflate patch_embed.proj.weight to {pre_train_dict['patch_embed.proj.weight'].shape}"
-                    )
+                    ].repeat(1, 1, t, 1, 1)
+                    logger.info(f"inflate patch_embed.proj.weight to {pre_train_dict['patch_embed.proj.weight'].shape}")
                 elif (
-                    len(pre_train_dict["patch_embed.proj.weight"].shape)
-                    == 5
-                    and len(model_dict["patch_embed.proj.weight"].shape)
-                    == 4
+                    len(pre_train_dict["patch_embed.proj.weight"].shape) == 5
+                    and len(model_dict["patch_embed.proj.weight"].shape) == 4
                 ):  # video->img
-                    orig_shape = pre_train_dict[
-                        "patch_embed.proj.weight"
-                    ].shape
+                    orig_shape = pre_train_dict["patch_embed.proj.weight"].shape
                     # pre_train_dict["patch_embed.proj.weight"] = pre_train_dict["patch_embed.proj.weight"][:, :, orig_shape[2]//2, :, :] # take center
-                    pre_train_dict[
-                        "patch_embed.proj.weight"
-                    ] = pre_train_dict["patch_embed.proj.weight"].sum(
+                    pre_train_dict["patch_embed.proj.weight"] = pre_train_dict["patch_embed.proj.weight"].sum(
                         2
                     )  # take avg
                     logger.info(
                         f"deflate patch_embed.proj.weight from {orig_shape} to {pre_train_dict['patch_embed.proj.weight'].shape}"
                     )
-                    if (
-                        "pos_embed_spatial" in pre_train_dict.keys()
-                        and "pos_embed" in model_dict.keys()
-                    ):
+                    if "pos_embed_spatial" in pre_train_dict.keys() and "pos_embed" in model_dict.keys():
                         pos_embds = pre_train_dict["pos_embed_spatial"]
                         if (
                             "pos_embed_class" in pre_train_dict.keys()
-                            and pos_embds.shape
-                            != model_dict["pos_embed"].shape
+                            and pos_embds.shape != model_dict["pos_embed"].shape
                         ):
                             pos_embds = torch.cat(
                                 [
@@ -343,13 +289,9 @@ def load_checkpoint(
                         if pos_embds.shape == model_dict["pos_embed"].shape:
                             pre_train_dict["pos_embed"] = pos_embds
                             pre_train_dict.pop("pos_embed_spatial")
-                            logger.info(
-                                f"successful surgery of pos embed w/ shape {pos_embds.shape} "
-                            )
+                            logger.info(f"successful surgery of pos embed w/ shape {pos_embds.shape} ")
                         else:
-                            logger.info(
-                                f"UNSUCCESSFUL surgery of pos embed w/ shape {pos_embds.shape} "
-                            )
+                            logger.info(f"UNSUCCESSFUL surgery of pos embed w/ shape {pos_embds.shape} ")
 
             qkv = [
                 "attn.pool_k.weight",
@@ -357,40 +299,22 @@ def load_checkpoint(
                 "attn.pool_v.weight",
             ]
             for k in pre_train_dict.keys():
-                if (
-                    any([x in k for x in qkv])
-                    and pre_train_dict[k].shape != model_dict[k].shape
-                ):
+                if any([x in k for x in qkv]) and pre_train_dict[k].shape != model_dict[k].shape:
                     # print(pre_train_dict[k].shape, model_dict[k].shape)
-                    logger.info(
-                        f"inflate {k} from {pre_train_dict[k].shape} to {model_dict[k].shape}"
-                    )
+                    logger.info(f"inflate {k} from {pre_train_dict[k].shape} to {model_dict[k].shape}")
                     t = model_dict[k].shape[2]
-                    pre_train_dict[k] = pre_train_dict[k].repeat(
-                        1, 1, t, 1, 1
-                    )
+                    pre_train_dict[k] = pre_train_dict[k].repeat(1, 1, t, 1, 1)
 
             for k in pre_train_dict.keys():
-                if (
-                    "rel_pos" in k
-                    and pre_train_dict[k].shape != model_dict[k].shape
-                ):
+                if "rel_pos" in k and pre_train_dict[k].shape != model_dict[k].shape:
                     # print(pre_train_dict[k].shape, model_dict[k].shape)
-                    logger.info(
-                        f"interpolating {k} from {pre_train_dict[k].shape} to {model_dict[k].shape}"
-                    )
+                    logger.info(f"interpolating {k} from {pre_train_dict[k].shape} to {model_dict[k].shape}")
                     new_pos_embed = torch.nn.functional.interpolate(
-                        pre_train_dict[k]
-                        .reshape(1, pre_train_dict[k].shape[0], -1)
-                        .permute(0, 2, 1),
+                        pre_train_dict[k].reshape(1, pre_train_dict[k].shape[0], -1).permute(0, 2, 1),
                         size=model_dict[k].shape[0],
                         mode="linear",
                     )
-                    new_pos_embed = (
-                        new_pos_embed.reshape(-1, model_dict[k].shape[0])
-                        .permute(1, 0)
-                        .squeeze()
-                    )
+                    new_pos_embed = new_pos_embed.reshape(-1, model_dict[k].shape[0]).permute(1, 0).squeeze()
                     pre_train_dict[k] = new_pos_embed
 
         # Match pre-trained weights that have same shape as current model.
@@ -411,11 +335,7 @@ def load_checkpoint(
                         )
                         v = v[0].t()
                         pre_train_dict_match[k] = v
-                        logger.info(
-                            "{} reshaped from {} to {}".format(
-                                k, v_shape, v.shape
-                            )
-                        )
+                        logger.info(f"{k} reshaped from {v_shape} to {v.shape}")
                     elif "pos_embed_temporal" in k:
                         v_shape = v.shape
                         v = torch.nn.functional.interpolate(
@@ -424,52 +344,34 @@ def load_checkpoint(
                             mode="linear",
                         )
                         pre_train_dict_match[k] = v.permute(0, 2, 1)
-                        logger.info(
-                            "{} reshaped from {} to {}".format(
-                                k, v_shape, pre_train_dict_match[k].shape
-                            )
-                        )
+                        logger.info(f"{k} reshaped from {v_shape} to {pre_train_dict_match[k].shape}")
                     elif "pos_embed_spatial" in k:
                         v_shape = v.shape
                         pretrain_size = int(math.sqrt(v_shape[1]))
                         model_size = int(math.sqrt(model_dict[k].shape[1]))
                         assert pretrain_size * pretrain_size == v_shape[1]
-                        assert (
-                            model_size * model_size
-                            == model_dict[k].shape[1]
-                        )
+                        assert model_size * model_size == model_dict[k].shape[1]
                         v = torch.nn.functional.interpolate(
-                            v.reshape(
-                                1, pretrain_size, pretrain_size, -1
-                            ).permute(0, 3, 1, 2),
+                            v.reshape(1, pretrain_size, pretrain_size, -1).permute(0, 3, 1, 2),
                             size=(model_size, model_size),
                             mode="bicubic",
                         )
-                        pre_train_dict_match[k] = v.reshape(
-                            1, -1, model_size * model_size
-                        ).permute(0, 2, 1)
-                        logger.info(
-                            "{} reshaped from {} to {}".format(
-                                k, v_shape, pre_train_dict_match[k].shape
-                            )
-                        )
+                        pre_train_dict_match[k] = v.reshape(1, -1, model_size * model_size).permute(0, 2, 1)
+                        logger.info(f"{k} reshaped from {v_shape} to {pre_train_dict_match[k].shape}")
                     else:
                         not_used_layers.append(k)
             else:
                 not_used_layers.append(k)
         # Weights that do not have match from the pre-trained model.
-        not_load_layers = [
-            k
-            for k in model_dict.keys()
-            if k not in pre_train_dict_match.keys()
-        ]
+        not_load_layers = [k for k in model_dict.keys() if k not in pre_train_dict_match.keys()]
         # Log weights that are not loaded with the pre-trained weights.
         if not_load_layers:
             for k in not_load_layers:
-                logger.info("Network weights {} not loaded.".format(k))
+                logger.info(f"Network weights {k} not loaded.")
         if not_used_layers:
             for k in not_used_layers:
-                logger.info("Network weights {} not used.".format(k))
+                logger.info(f"Network weights {k} not used.")
+
         # Load pre-trained weights.
         def _change_model_keys(model_state):
             for key in list(model_state.keys()):
@@ -477,18 +379,19 @@ def load_checkpoint(
                     key_word_list = key.split(".")
                     kqv = key_word_list[3][-1]
                     norm_pool = key_word_list[3][:4]
-                    new_key = ".".join([key_word_list[0], key_word_list[1], "attn", "atn_pool_" + kqv, norm_pool, key_word_list[-1]])
+                    new_key = ".".join(
+                        [key_word_list[0], key_word_list[1], "attn", "atn_pool_" + kqv, norm_pool, key_word_list[-1]]
+                    )
                     # print(f"old_key: {key}\t new_key: {new_key}")
                     model_state[new_key] = model_state.pop(key)
             return model_state
+
         if change_model_keys:
             pre_train_dict_match = _change_model_keys(pre_train_dict_match)
-        missing_keys, unexpected_keys = ms.load_state_dict(
-            pre_train_dict_match, strict=False
-        )
+        missing_keys, unexpected_keys = ms.load_state_dict(pre_train_dict_match, strict=False)
 
-        print("missing keys: {}".format(missing_keys))
-        print("unexpected keys: {}".format(unexpected_keys))
+        print(f"missing keys: {missing_keys}")
+        print(f"unexpected keys: {unexpected_keys}")
         epoch = -1
 
         # Load the optimizer state (commonly not done when fine-tuning)
@@ -599,15 +502,8 @@ def normal_to_sub_bn(checkpoint_sd, model_sd):
                 and model_blob_shape[0] % c2_blob_shape[0] == 0
             ):
                 before_shape = checkpoint_sd[key].shape
-                checkpoint_sd[key] = torch.cat(
-                    [checkpoint_sd[key]]
-                    * (model_blob_shape[0] // c2_blob_shape[0])
-                )
-                logger.info(
-                    "{} {} -> {}".format(
-                        key, before_shape, checkpoint_sd[key].shape
-                    )
-                )
+                checkpoint_sd[key] = torch.cat([checkpoint_sd[key]] * (model_blob_shape[0] // c2_blob_shape[0]))
+                logger.info(f"{key} {before_shape} -> {checkpoint_sd[key].shape}")
     return checkpoint_sd
 
 
@@ -627,7 +523,7 @@ def load_test_checkpoint(cfg, model):
             None,
             inflation=False,
             convert_from_caffe2=cfg.TEST.CHECKPOINT_TYPE == "caffe2",
-            change_model_keys=cfg.MViT._change_model_keys
+            change_model_keys=cfg.MViT._change_model_keys,
         )
     elif has_checkpoint(cfg.OUTPUT_DIR):
         last_checkpoint = get_last_checkpoint(cfg.OUTPUT_DIR, cfg.TASK)
@@ -643,12 +539,10 @@ def load_test_checkpoint(cfg, model):
             None,
             inflation=False,
             convert_from_caffe2=cfg.TRAIN.CHECKPOINT_TYPE == "caffe2",
-            change_model_keys=cfg.MViT._change_model_keys
+            change_model_keys=cfg.MViT._change_model_keys,
         )
     else:
-        logger.info(
-            "Unknown way of loading checkpoint. Using with random initialization, only for debugging."
-        )
+        logger.info("Unknown way of loading checkpoint. Using with random initialization, only for debugging.")
 
 
 def load_train_checkpoint(cfg, model, optimizer, scaler=None):
@@ -657,7 +551,7 @@ def load_train_checkpoint(cfg, model, optimizer, scaler=None):
     """
     if cfg.auto_resume and has_checkpoint(cfg.OUTPUT_DIR):
         last_checkpoint = get_last_checkpoint(cfg.OUTPUT_DIR)
-        logger.info("Load from last checkpoint, {}.".format(last_checkpoint))
+        logger.info(f"Load from last checkpoint, {last_checkpoint}.")
         checkpoint_epoch = load_checkpoint(
             last_checkpoint,
             model,

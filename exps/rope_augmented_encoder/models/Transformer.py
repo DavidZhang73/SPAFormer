@@ -1,16 +1,17 @@
 import copy
-from typing import Optional, Any
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-from torch import Tensor
 import torch.nn.functional as F
-from .activation import MultiheadAttention
-from torch.nn.modules.container import ModuleList
+from torch import Tensor
 from torch.nn.init import xavier_uniform_
+from torch.nn.modules.container import ModuleList
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.linear import Linear
 from torch.nn.modules.normalization import LayerNorm
+
+from .activation import MultiheadAttention
 
 
 class Transformer(nn.Module):
@@ -42,9 +43,18 @@ class Transformer(nn.Module):
     https://github.com/pytorch/examples/tree/master/word_language_model
     """
 
-    def __init__(self, d_model: int = 512, nhead: int = 8, num_encoder_layers: int = 6,
-                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 activation: str = "relu", custom_encoder: Optional[Any] = None, custom_decoder: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        d_model: int = 512,
+        nhead: int = 8,
+        num_encoder_layers: int = 6,
+        num_decoder_layers: int = 6,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: str = "relu",
+        custom_encoder: Optional[Any] = None,
+        custom_decoder: Optional[Any] = None,
+    ) -> None:
         super(Transformer, self).__init__()
 
         if custom_encoder is not None:
@@ -66,9 +76,17 @@ class Transformer(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
 
-    def forward(self, src: Tensor, tgt: Tensor, src_mask: Optional[Tensor] = None, tgt_mask: Optional[Tensor] = None,
-                memory_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self,
+        src: Tensor,
+        tgt: Tensor,
+        src_mask: Optional[Tensor] = None,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+    ) -> Tensor:
         r"""Take in and process masked source/target sequences.
 
         Args:
@@ -95,7 +113,7 @@ class Transformer(nn.Module):
             positions. If a ByteTensor is provided, the non-zero positions are not allowed to attend
             while the zero positions will be unchanged. If a BoolTensor is provided, positions with ``True``
             are not allowed to attend while ``False`` values will be unchanged. If a FloatTensor
-            is provided, it will be added to the attention weight. 
+            is provided, it will be added to the attention weight.
             [src/tgt/memory]_key_padding_mask provides specified elements in the key to be ignored by
             the attention. If a ByteTensor is provided, the non-zero positions will be ignored while the zero
             positions will be unchanged. If a BoolTensor is provided, the positions with the
@@ -121,20 +139,23 @@ class Transformer(nn.Module):
             raise RuntimeError("the feature number of src and tgt must be equal to d_model")
 
         memory = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-        output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
-                              tgt_key_padding_mask=tgt_key_padding_mask,
-                              memory_key_padding_mask=memory_key_padding_mask)
+        output = self.decoder(
+            tgt,
+            memory,
+            tgt_mask=tgt_mask,
+            memory_mask=memory_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
+        )
         return output
-
 
     def generate_square_subsequent_mask(self, sz: int) -> Tensor:
         r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
+        Unmasked positions are filled with float(0.0).
         """
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        mask = mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, 0.0)
         return mask
-
 
     def _reset_parameters(self):
         r"""Initiate parameters in the transformer model."""
@@ -142,7 +163,6 @@ class Transformer(nn.Module):
         for p in self.parameters():
             if p.dim() > 1:
                 xavier_uniform_(p)
-
 
 
 class TransformerEncoder(nn.Module):
@@ -159,7 +179,8 @@ class TransformerEncoder(nn.Module):
         >>> src = torch.rand(10, 32, 512)
         >>> out = transformer_encoder(src)
     """
-    __constants__ = ['norm']
+
+    __constants__ = ["norm"]
 
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(TransformerEncoder, self).__init__()
@@ -167,7 +188,14 @@ class TransformerEncoder(nn.Module):
         self.num_layers = num_layers
         self.norm = norm
 
-    def forward(self, src: Tensor, mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None, each_layer_instance: Optional[Tensor] = None, return_intermedidate: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self,
+        src: Tensor,
+        mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        each_layer_instance: Optional[Tensor] = None,
+        return_intermedidate: Optional[Tensor] = None,
+    ) -> Tensor:
         r"""Pass the input through the encoder layers in turn.
 
         Args:
@@ -189,7 +217,7 @@ class TransformerEncoder(nn.Module):
                     output_list.append(output)
 
                 output[:, :, -40:] = instance_encoding
-            
+
             if self.norm is not None:
                 if return_intermedidate == True:
                     output_list = [self.norm(output) for output in output_list]
@@ -237,7 +265,8 @@ class TransformerDecoder(nn.Module):
         >>> tgt = torch.rand(20, 32, 512)
         >>> out = transformer_decoder(tgt, memory)
     """
-    __constants__ = ['norm']
+
+    __constants__ = ["norm"]
 
     def __init__(self, decoder_layer, num_layers, norm=None):
         super(TransformerDecoder, self).__init__()
@@ -245,9 +274,15 @@ class TransformerDecoder(nn.Module):
         self.num_layers = num_layers
         self.norm = norm
 
-    def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None,
-                memory_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
-                memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+    ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer in turn.
 
         Args:
@@ -264,10 +299,14 @@ class TransformerDecoder(nn.Module):
         output = tgt
 
         for mod in self.layers:
-            output = mod(output, memory, tgt_mask=tgt_mask,
-                         memory_mask=memory_mask,
-                         tgt_key_padding_mask=tgt_key_padding_mask,
-                         memory_key_padding_mask=memory_key_padding_mask)
+            output = mod(
+                output,
+                memory,
+                tgt_mask=tgt_mask,
+                memory_mask=memory_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                memory_key_padding_mask=memory_key_padding_mask,
+            )
 
         if self.norm is not None:
             output = self.norm(output)
@@ -312,11 +351,13 @@ class TransformerEncoderLayer(nn.Module):
         self.activation = _get_activation_fn(activation)
 
     def __setstate__(self, state):
-        if 'activation' not in state:
-            state['activation'] = F.relu
+        if "activation" not in state:
+            state["activation"] = F.relu
         super(TransformerEncoderLayer, self).__setstate__(state)
 
-    def forward(self, src: Tensor, src_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self, src: Tensor, src_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None
+    ) -> Tensor:
         r"""Pass the input through the encoder layer.
 
         Args:
@@ -327,15 +368,13 @@ class TransformerEncoderLayer(nn.Module):
         Shape:
             see the docs in Transformer class.
         """
-        src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask)[0]
+        src2 = self.self_attn(src, src, src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask)[0]
         src = src + self.dropout1(src2)
         src = self.norm1(src)
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = src + self.dropout2(src2)
         src = self.norm2(src)
         return src
-
 
 
 class TransformerDecoderLayer(nn.Module):
@@ -379,12 +418,19 @@ class TransformerDecoderLayer(nn.Module):
         self.activation = _get_activation_fn(activation)
 
     def __setstate__(self, state):
-        if 'activation' not in state:
-            state['activation'] = F.relu
+        if "activation" not in state:
+            state["activation"] = F.relu
         super(TransformerDecoderLayer, self).__setstate__(state)
 
-    def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None, memory_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+    ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer.
 
         Args:
@@ -398,19 +444,18 @@ class TransformerDecoderLayer(nn.Module):
         Shape:
             see the docs in Transformer class.
         """
-        tgt2 = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask,
-                              key_padding_mask=tgt_key_padding_mask)[0]
+        tgt2 = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask)[0]
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
-        tgt2 = self.multihead_attn(tgt, memory, memory, attn_mask=memory_mask,
-                                   key_padding_mask=memory_key_padding_mask)[0]
+        tgt2 = self.multihead_attn(
+            tgt, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask
+        )[0]
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
         tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
         return tgt
-
 
 
 def _get_clones(module, N):
@@ -423,4 +468,4 @@ def _get_activation_fn(activation):
     elif activation == "gelu":
         return F.gelu
 
-    raise RuntimeError("activation should be relu/gelu, not {}".format(activation))
+    raise RuntimeError(f"activation should be relu/gelu, not {activation}")

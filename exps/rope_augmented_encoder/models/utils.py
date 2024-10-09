@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pointnet2_ops import pointnet2_utils
 
+
 def cal_loss(pred, gold, smoothing=True):
-    ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+    """Calculate cross entropy loss, apply label smoothing if needed."""
 
     gold = gold.contiguous().view(-1)
 
@@ -18,21 +19,23 @@ def cal_loss(pred, gold, smoothing=True):
 
         loss = -(one_hot * log_prb).sum(dim=1).mean()
     else:
-        loss = F.cross_entropy(pred, gold, reduction='mean')
+        loss = F.cross_entropy(pred, gold, reduction="mean")
 
     return loss
 
-class IOStream():
+
+class IOStream:
     def __init__(self, path):
-        self.f = open(path, 'a')
+        self.f = open(path, "a")
 
     def cprint(self, text):
         print(text)
-        self.f.write(text+'\n')
+        self.f.write(text + "\n")
         self.f.flush()
 
     def close(self):
         self.f.close()
+
 
 def square_distance(src, dst):
     """
@@ -51,9 +54,10 @@ def square_distance(src, dst):
     B, N, _ = src.shape
     _, M, _ = dst.shape
     dist = -2 * torch.matmul(src, dst.permute(0, 2, 1))
-    dist += torch.sum(src ** 2, -1).view(B, N, 1)
-    dist += torch.sum(dst ** 2, -1).view(B, 1, M)
+    dist += torch.sum(src**2, -1).view(B, N, 1)
+    dist += torch.sum(dst**2, -1).view(B, 1, M)
     return dist
+
 
 def index_points(points, idx):
     """
@@ -73,6 +77,7 @@ def index_points(points, idx):
     new_points = points[batch_indices, idx, :]
     return new_points
 
+
 def query_ball_point(radius, nsample, xyz, new_xyz):
     """
     Input:
@@ -88,12 +93,13 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
     _, S, _ = new_xyz.shape
     group_idx = torch.arange(N, dtype=torch.long).cuda(torch.cuda.current_device()).view(1, 1, N).repeat([B, S, 1])
     sqrdists = square_distance(new_xyz, xyz)
-    group_idx[sqrdists > radius ** 2] = N
+    group_idx[sqrdists > radius**2] = N
     group_idx = group_idx.sort(dim=-1)[0][:, :, :nsample]
     group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
     mask = group_idx == N
     group_idx[mask] = group_first[mask]
     return group_idx
+
 
 def knn_point(nsample, xyz, new_xyz):
     """
@@ -105,8 +111,9 @@ def knn_point(nsample, xyz, new_xyz):
         group_idx: grouped points index, [B, S, nsample]
     """
     sqrdists = square_distance(new_xyz, xyz)
-    _, group_idx = torch.topk(sqrdists, nsample, dim = -1, largest=False, sorted=False)
+    _, group_idx = torch.topk(sqrdists, nsample, dim=-1, largest=False, sorted=False)
     return group_idx.cpu()
+
 
 def sample_and_group(npoint, radius, nsample, xyz, points):
     """
@@ -121,23 +128,24 @@ def sample_and_group(npoint, radius, nsample, xyz, points):
         new_points: sampled points data, [B, npoint, nsample, 3+D]
     """
     B, N, C = xyz.shape
-    S = npoint 
+    S = npoint
     xyz = xyz.contiguous()
 
-    fps_idx = pointnet2_utils.furthest_point_sample(xyz, npoint).long() # [B, npoint]
-    new_xyz = index_points(xyz, fps_idx) 
+    fps_idx = pointnet2_utils.furthest_point_sample(xyz, npoint).long()  # [B, npoint]
+    new_xyz = index_points(xyz, fps_idx)
     new_points = index_points(points, fps_idx)
     # new_xyz = xyz[:]
     # new_points = points[:]
 
     idx = knn_point(nsample, xyz, new_xyz)
-    #idx = query_ball_point(radius, nsample, xyz, new_xyz)
-    grouped_xyz = index_points(xyz, idx) # [B, npoint, nsample, C]
+    # idx = query_ball_point(radius, nsample, xyz, new_xyz)
+    grouped_xyz = index_points(xyz, idx)  # [B, npoint, nsample, C]
     grouped_xyz_norm = grouped_xyz - new_xyz.view(B, S, 1, C)
     grouped_points = index_points(points, idx)
     grouped_points_norm = grouped_points - new_points.view(B, S, 1, -1)
     new_points = torch.cat([grouped_points_norm, new_points.view(B, S, 1, -1).repeat(1, 1, nsample, 1)], dim=-1)
     return new_xyz, new_points
+
 
 class MLP(torch.nn.Module):
     def __init__(self, in_dim, out_dim, pt_dim=3, uses_pt=True):
@@ -148,13 +156,13 @@ class MLP(torch.nn.Module):
         d6 = int(2 * self.output)
         d7 = self.output
         self.encode_position = nn.Sequential(
-                nn.Linear(pt_dim, in_dim),
-                nn.LayerNorm(in_dim),
-                nn.ReLU(),
-                nn.Linear(in_dim, in_dim),
-                nn.LayerNorm(in_dim),
-                nn.ReLU(),
-                )
+            nn.Linear(pt_dim, in_dim),
+            nn.LayerNorm(in_dim),
+            nn.ReLU(),
+            nn.Linear(in_dim, in_dim),
+            nn.LayerNorm(in_dim),
+            nn.ReLU(),
+        )
         d5 = 2 * in_dim if self.uses_pt else in_dim
         self.fc_block = nn.Sequential(
             nn.Linear(int(d5), d6),
@@ -163,11 +171,13 @@ class MLP(torch.nn.Module):
             nn.Linear(int(d6), d6),
             nn.LayerNorm(int(d6)),
             nn.ReLU(),
-            nn.Linear(d6, d7))
+            nn.Linear(d6, d7),
+        )
 
     def forward(self, x, pt=None):
         if self.uses_pt:
-            if pt is None: raise RuntimeError('did not provide pt')
+            if pt is None:
+                raise RuntimeError("did not provide pt")
             y = self.encode_position(pt)
             x = torch.cat([x, y], dim=-1)
         return self.fc_block(x)
@@ -210,8 +220,9 @@ class PointNet(nn.Module):
         x = F.relu(self.bn6(self.mlp1(x)))
         return x
 
+
 class DropoutSampler(torch.nn.Module):
-    def __init__(self, num_features, num_outputs, dropout_rate = 0.5):
+    def __init__(self, num_features, num_outputs, dropout_rate=0.5):
         super(DropoutSampler, self).__init__()
         self.linear = nn.Linear(num_features, num_features)
         self.linear2 = nn.Linear(num_features, num_features)
@@ -230,7 +241,7 @@ class DropoutSampler(torch.nn.Module):
 
 
 class PosePredictor(torch.nn.Module):
-    def __init__(self, num_features, num_outputs, dropout_rate = 0.5):
+    def __init__(self, num_features, num_outputs, dropout_rate=0.5):
         super(PosePredictor, self).__init__()
         self.linear = nn.Linear(num_features, num_features)
         self.linear2 = nn.Linear(num_features, num_features)
@@ -257,8 +268,8 @@ class PosePredictor(torch.nn.Module):
 def generate_square_subsequent_mask(sz, part_id=None):
     # mask = (torch.triu(torch.ones((sz, sz))) == 1).transpose(0, 1)
     # mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-    
-    # 创建sz x sz的全零矩阵 
+
+    # 创建sz x sz的全零矩阵
 
     # # 将mask矩阵放到右下角
     # fused_mask[sz:, sz:] = mask
@@ -273,6 +284,6 @@ def generate_square_subsequent_mask(sz, part_id=None):
     if part_id is not None:
         matmul_ids = torch.matmul(part_id.unsqueeze(2), part_id.unsqueeze(1))
         square_ids = (part_id * part_id).unsqueeze(2)
-        mask = (matmul_ids == square_ids)
-        mask = (mask).float().masked_fill((mask)==0, float('-inf')).masked_fill((mask)==1, float(0.0))
+        mask = matmul_ids == square_ids
+        mask = (mask).float().masked_fill((mask) == 0, float("-inf")).masked_fill((mask) == 1, 0.0)
     return mask

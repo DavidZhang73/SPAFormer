@@ -1,3 +1,6 @@
+.ruff_cache
+prep_data/PartNet
+
 prepare_data
 checkpoints
 checkpoints.zip

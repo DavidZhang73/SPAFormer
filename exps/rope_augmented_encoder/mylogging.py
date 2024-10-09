@@ -7,10 +7,10 @@ import functools
 import logging
 import os
 import sys
-import simplejson
-from iopath.common.file_io import g_pathmgr
 
 import distributed as du
+import simplejson
+from iopath.common.file_io import g_pathmgr
 
 
 def _suppress_print():
@@ -27,9 +27,7 @@ def _suppress_print():
 @functools.lru_cache(maxsize=None)
 def _cached_log_stream(filename):
     # Use 1K buffer if writing to cloud storage.
-    io = g_pathmgr.open(
-        filename, "a", buffering=1024 if "://" in filename else -1
-    )
+    io = g_pathmgr.open(filename, "a", buffering=1024 if "://" in filename else -1)
     atexit.register(io.close)
     return io
 
@@ -87,10 +85,7 @@ def log_json_stats(stats):
     Args:
         stats (dict): a dictionary of statistical information to log.
     """
-    stats = {
-        k: decimal.Decimal("{:.5f}".format(v)) if isinstance(v, float) else v
-        for k, v in stats.items()
-    }
+    stats = {k: decimal.Decimal(f"{v:.5f}") if isinstance(v, float) else v for k, v in stats.items()}
     json_stats = simplejson.dumps(stats, sort_keys=True, use_decimal=True)
     logger = get_logger(__name__)
-    logger.info("json_stats: {:s}".format(json_stats))
+    logger.info(f"json_stats: {json_stats:s}")

@@ -1,31 +1,31 @@
 r"""Functional interface"""
-import warnings
+
 import math
+import warnings
 
 import torch
-from torch.nn.modules import utils
-from torch.nn.modules.utils import _single, _pair, _triple, _list_with_default
-from torch import _VF
-from torch._jit_internal import boolean_dispatch, List, Optional, _overload, Tuple
-from torch.overrides import has_torch_function, handle_torch_function
 import torch.nn.functional as F
+from torch import _VF
+from torch._jit_internal import List, Optional, Tuple, _overload, boolean_dispatch
+from torch.nn.modules import utils
+from torch.nn.modules.utils import _list_with_default, _pair, _single, _triple
+from torch.overrides import handle_torch_function, has_torch_function
 
 Tensor = torch.Tensor
 
 GRID_SAMPLE_INTERPOLATION_MODES = {
-    'bilinear': 0,
-    'nearest': 1,
+    "bilinear": 0,
+    "nearest": 1,
 }
 
 GRID_SAMPLE_PADDING_MODES = {
-    'zeros': 0,
-    'border': 1,
-    'reflection': 2,
+    "zeros": 0,
+    "border": 1,
+    "reflection": 2,
 }
 
 
-
-def _pad(input, pad, mode='constant', value=0):
+def _pad(input, pad, mode="constant", value=0):
     # type: (Tensor, List[int], str, float) -> Tensor
     r"""Pads tensor.
 
@@ -87,48 +87,48 @@ def _pad(input, pad, mode='constant', value=0):
     """
     if not torch.jit.is_scripting():
         if type(input) is not Tensor and has_torch_function((input,)):
-            return handle_torch_function(
-                _pad, (input,), input, pad, mode=mode, value=value)
-    assert len(pad) % 2 == 0, 'Padding length must be divisible by 2'
-    assert len(pad) // 2 <= input.dim(), 'Padding length too large'
-    if mode == 'constant':
+            return handle_torch_function(_pad, (input,), input, pad, mode=mode, value=value)
+    assert len(pad) % 2 == 0, "Padding length must be divisible by 2"
+    assert len(pad) // 2 <= input.dim(), "Padding length too large"
+    if mode == "constant":
         return _VF.constant_pad_nd(input, pad, value)
     else:
-        assert value == 0, 'Padding mode "{}"" doesn\'t take in value argument'.format(mode)
+        assert value == 0, f'Padding mode "{mode}"" doesn\'t take in value argument'
         if input.dim() == 3:
-            assert len(pad) == 2, '3D tensors expect 2 values for padding'
-            if mode == 'reflect':
+            assert len(pad) == 2, "3D tensors expect 2 values for padding"
+            if mode == "reflect":
                 return torch._C._nn.reflection_pad1d(input, pad)
-            elif mode == 'replicate':
+            elif mode == "replicate":
                 return torch._C._nn.replication_pad1d(input, pad)
-            elif mode == 'circular':
+            elif mode == "circular":
                 return _pad_circular(input, pad)
             else:
                 raise NotImplementedError
 
         elif input.dim() == 4:
-            assert len(pad) == 4, '4D tensors expect 4 values for padding'
-            if mode == 'reflect':
+            assert len(pad) == 4, "4D tensors expect 4 values for padding"
+            if mode == "reflect":
                 return torch._C._nn.reflection_pad2d(input, pad)
-            elif mode == 'replicate':
+            elif mode == "replicate":
                 return torch._C._nn.replication_pad2d(input, pad)
-            elif mode == 'circular':
+            elif mode == "circular":
                 return _pad_circular(input, pad)
             else:
                 raise NotImplementedError
 
         elif input.dim() == 5:
-            assert len(pad) == 6, '5D tensors expect 6 values for padding'
-            if mode == 'reflect':
+            assert len(pad) == 6, "5D tensors expect 6 values for padding"
+            if mode == "reflect":
                 raise NotImplementedError
-            elif mode == 'replicate':
+            elif mode == "replicate":
                 return torch._C._nn.replication_pad3d(input, pad)
-            elif mode == 'circular':
+            elif mode == "circular":
                 return _pad_circular(input, pad)
             else:
                 raise NotImplementedError
         else:
             raise NotImplementedError("Only 3D, 4D, 5D padding with non-constant padding are supported for now")
+
 
 # We define this function as _pad because it takes an argument
 # named pad, which clobbers the recursive reference to the pad
@@ -138,13 +138,12 @@ pad = _pad
 # distance
 
 
-def pairwise_distance(x1, x2, p=2., eps=1e-6, keepdim=False):
+def pairwise_distance(x1, x2, p=2.0, eps=1e-6, keepdim=False):
     # type: (Tensor, Tensor, float, float, bool) -> Tensor
     r"""
     See :class:`torch.nn.PairwiseDistance` for details
     """
     return torch.pairwise_distance(x1, x2, p, eps, keepdim)
-
 
 
 def _pad_circular(input, padding):
@@ -202,21 +201,19 @@ def _pad_circular(input, padding):
 
     for idx, size in enumerate(paddable_shape):
         # Only supports wrapping around once
-        assert padding[-(idx * 2 + 1)] <= size, \
-            "Padding value causes wrapping around more than once."
-        assert padding[-(idx * 2 + 2)] <= size, \
-            "Padding value causes wrapping around more than once."
+        assert padding[-(idx * 2 + 1)] <= size, "Padding value causes wrapping around more than once."
+        assert padding[-(idx * 2 + 2)] <= size, "Padding value causes wrapping around more than once."
         # Negative padding should not result in negative sizes
-        assert padding[-(idx * 2 + 1)] + padding[-(idx * 2 + 2)] + size >= 0, \
-            "Negative padding value is resulting in an empty dimension."
+        assert (
+            padding[-(idx * 2 + 1)] + padding[-(idx * 2 + 2)] + size >= 0
+        ), "Negative padding value is resulting in an empty dimension."
 
     # Get shape of padded tensor
     out_shape = in_shape[:2]
     for idx, size in enumerate(paddable_shape):
         out_shape += (size + padding[-(idx * 2 + 1)] + padding[-(idx * 2 + 2)],)
 
-    out = torch.empty(out_shape, dtype=input.dtype, layout=input.layout,
-                      device=input.device)
+    out = torch.empty(out_shape, dtype=input.dtype, layout=input.layout, device=input.device)
 
     # Put original array in padded array
     if ndim == 1:
@@ -240,8 +237,7 @@ def _pad_circular(input, padding):
         in_h0 = max(-padding[-4], 0)
         in_h1 = in_shape[3] - max(-padding[-3], 0)
 
-        out[..., out_d0:out_d1, out_h0:out_h1] = \
-            input[..., in_d0:in_d1, in_h0:in_h1]
+        out[..., out_d0:out_d1, out_h0:out_h1] = input[..., in_d0:in_d1, in_h0:in_h1]
     elif ndim == 3:
         out_d0 = max(padding[-2], 0)
         out_d1 = out_shape[2] - max(padding[-1], 0)
@@ -261,8 +257,7 @@ def _pad_circular(input, padding):
         in_w0 = max(-padding[-6], 0)
         in_w1 = in_shape[4] - max(-padding[-5], 0)
 
-        out[..., out_d0:out_d1, out_h0:out_h1, out_w0:out_w1] = \
-            input[..., in_d0:in_d1, in_h0:in_h1, in_w0:in_w1]
+        out[..., out_d0:out_d1, out_h0:out_h1, out_w0:out_w1] = input[..., in_d0:in_d1, in_h0:in_h1, in_w0:in_w1]
 
     # The following steps first pad the beginning of the tensor (left side),
     # and then pad the end of the tensor (right side).
@@ -292,15 +287,13 @@ def _pad_circular(input, padding):
             i1 = out_shape[3] - max(padding[-3], 0)
             o0 = 0
             o1 = padding[-4]
-            out[:, :, :, o0:o1] = \
-                out[:, :, :, i0:i1]
+            out[:, :, :, o0:o1] = out[:, :, :, i0:i1]
         if padding[-3] > 0:
             i0 = max(padding[-4], 0)
             i1 = max(padding[-4], 0) + padding[-3]
             o0 = out_shape[3] - padding[-3]
             o1 = out_shape[3]
-            out[:, :, :, o0:o1] = \
-                out[:, :, :, i0:i1]
+            out[:, :, :, o0:o1] = out[:, :, :, i0:i1]
 
     # Pad third dimension (width)
     if len(padding) > 4:
@@ -309,15 +302,13 @@ def _pad_circular(input, padding):
             i1 = out_shape[4] - max(padding[-5], 0)
             o0 = 0
             o1 = padding[-6]
-            out[:, :, :, :, o0:o1] = \
-                out[:, :, :, :, i0:i1]
+            out[:, :, :, :, o0:o1] = out[:, :, :, :, i0:i1]
         if padding[-5] > 0:
             i0 = max(padding[-6], 0)
             i1 = max(padding[-6], 0) + padding[-5]
             o0 = out_shape[4] - padding[-5]
             o1 = out_shape[4]
-            out[:, :, :, :, o0:o1] = \
-                out[:, :, :, :, i0:i1]
+            out[:, :, :, :, o0:o1] = out[:, :, :, :, i0:i1]
 
     return out
 
@@ -352,32 +343,33 @@ def linear(input, weight, bias=None):
     return ret
 
 
-def multi_head_attention_forward(query: Tensor,
-                                 key: Tensor,
-                                 value: Tensor,
-                                 embed_dim_to_check: int,
-                                 num_heads: int,
-                                 in_proj_weight: Tensor,
-                                 in_proj_bias: Tensor,
-                                 bias_k: Optional[Tensor],
-                                 bias_v: Optional[Tensor],
-                                 add_zero_attn: bool,
-                                 dropout_p: float,
-                                 out_proj_weight: Tensor,
-                                 out_proj_bias: Tensor,
-                                 training: bool = True,
-                                 key_padding_mask: Optional[Tensor] = None,
-                                 need_weights: bool = True,
-                                 attn_mask: Optional[Tensor] = None,
-                                 use_separate_proj_weight: bool = False,
-                                 q_proj_weight: Optional[Tensor] = None,
-                                 k_proj_weight: Optional[Tensor] = None,
-                                 v_proj_weight: Optional[Tensor] = None,
-                                 static_k: Optional[Tensor] = None,
-                                 static_v: Optional[Tensor] = None,
-                                 rope: Optional[Tensor] = None,
-                                 multi_cat: Optional[Tensor] = None,
-                                 ) -> Tuple[Tensor, Optional[Tensor]]:
+def multi_head_attention_forward(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    embed_dim_to_check: int,
+    num_heads: int,
+    in_proj_weight: Tensor,
+    in_proj_bias: Tensor,
+    bias_k: Optional[Tensor],
+    bias_v: Optional[Tensor],
+    add_zero_attn: bool,
+    dropout_p: float,
+    out_proj_weight: Tensor,
+    out_proj_bias: Tensor,
+    training: bool = True,
+    key_padding_mask: Optional[Tensor] = None,
+    need_weights: bool = True,
+    attn_mask: Optional[Tensor] = None,
+    use_separate_proj_weight: bool = False,
+    q_proj_weight: Optional[Tensor] = None,
+    k_proj_weight: Optional[Tensor] = None,
+    v_proj_weight: Optional[Tensor] = None,
+    static_k: Optional[Tensor] = None,
+    static_v: Optional[Tensor] = None,
+    rope: Optional[Tensor] = None,
+    multi_cat: Optional[Tensor] = None,
+) -> Tuple[Tensor, Optional[Tensor]]:
     r"""
     Args:
         query, key, value: map a query and a set of key-value pairs to an output.
@@ -435,18 +427,37 @@ def multi_head_attention_forward(query: Tensor,
           L is the target sequence length, S is the source sequence length.
     """
     if not torch.jit.is_scripting():
-        tens_ops = (query, key, value, in_proj_weight, in_proj_bias, bias_k, bias_v,
-                    out_proj_weight, out_proj_bias)
+        tens_ops = (query, key, value, in_proj_weight, in_proj_bias, bias_k, bias_v, out_proj_weight, out_proj_bias)
         if any([type(t) is not Tensor for t in tens_ops]) and has_torch_function(tens_ops):
             return handle_torch_function(
-                multi_head_attention_forward, tens_ops, query, key, value,
-                embed_dim_to_check, num_heads, in_proj_weight, in_proj_bias,
-                bias_k, bias_v, add_zero_attn, dropout_p, out_proj_weight,
-                out_proj_bias, training=training, key_padding_mask=key_padding_mask,
-                need_weights=need_weights, attn_mask=attn_mask,
+                multi_head_attention_forward,
+                tens_ops,
+                query,
+                key,
+                value,
+                embed_dim_to_check,
+                num_heads,
+                in_proj_weight,
+                in_proj_bias,
+                bias_k,
+                bias_v,
+                add_zero_attn,
+                dropout_p,
+                out_proj_weight,
+                out_proj_bias,
+                training=training,
+                key_padding_mask=key_padding_mask,
+                need_weights=need_weights,
+                attn_mask=attn_mask,
                 use_separate_proj_weight=use_separate_proj_weight,
-                q_proj_weight=q_proj_weight, k_proj_weight=k_proj_weight,
-                v_proj_weight=v_proj_weight, static_k=static_k, static_v=static_v, rope=rope, multi_cat=multi_cat)
+                q_proj_weight=q_proj_weight,
+                k_proj_weight=k_proj_weight,
+                v_proj_weight=v_proj_weight,
+                static_k=static_k,
+                static_v=static_v,
+                rope=rope,
+                multi_cat=multi_cat,
+            )
     tgt_len, bsz, embed_dim = query.size()
     assert embed_dim == embed_dim_to_check
     # allow MHA to have different sizes for the feature dimension
@@ -477,7 +488,6 @@ def multi_head_attention_forward(query: Tensor,
                 k = None
                 v = None
             else:
-
                 # This is inline in_proj function with in_proj_weight and in_proj_bias
                 _b = in_proj_bias
                 _start = embed_dim
@@ -529,8 +539,8 @@ def multi_head_attention_forward(query: Tensor,
 
         if in_proj_bias is not None:
             q = linear(query, q_proj_weight_non_opt, in_proj_bias[0:embed_dim])
-            k = linear(key, k_proj_weight_non_opt, in_proj_bias[embed_dim:(embed_dim * 2)])
-            v = linear(value, v_proj_weight_non_opt, in_proj_bias[(embed_dim * 2):])
+            k = linear(key, k_proj_weight_non_opt, in_proj_bias[embed_dim : (embed_dim * 2)])
+            v = linear(value, v_proj_weight_non_opt, in_proj_bias[(embed_dim * 2) :])
         else:
             q = linear(query, q_proj_weight_non_opt, in_proj_bias)
             k = linear(key, k_proj_weight_non_opt, in_proj_bias)
@@ -538,9 +548,13 @@ def multi_head_attention_forward(query: Tensor,
     q = q * scaling
 
     if attn_mask is not None:
-        assert attn_mask.dtype == torch.float32 or attn_mask.dtype == torch.float64 or \
-            attn_mask.dtype == torch.float16 or attn_mask.dtype == torch.uint8 or attn_mask.dtype == torch.bool, \
-            'Only float, byte, and bool types are supported for attn_mask, not {}'.format(attn_mask.dtype)
+        assert (
+            attn_mask.dtype == torch.float32
+            or attn_mask.dtype == torch.float64
+            or attn_mask.dtype == torch.float16
+            or attn_mask.dtype == torch.uint8
+            or attn_mask.dtype == torch.bool
+        ), f"Only float, byte, and bool types are supported for attn_mask, not {attn_mask.dtype}"
         if attn_mask.dtype == torch.uint8:
             warnings.warn("Byte tensor for attn_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
             attn_mask = attn_mask.to(torch.bool)
@@ -548,17 +562,19 @@ def multi_head_attention_forward(query: Tensor,
         if attn_mask.dim() == 2:
             attn_mask = attn_mask.unsqueeze(0)
             if list(attn_mask.size()) != [1, query.size(0), key.size(0)]:
-                raise RuntimeError('The size of the 2D attn_mask is not correct.')
+                raise RuntimeError("The size of the 2D attn_mask is not correct.")
         elif attn_mask.dim() == 3:
             if list(attn_mask.size()) != [bsz * num_heads, query.size(0), key.size(0)]:
-                raise RuntimeError('The size of the 3D attn_mask is not correct.')
+                raise RuntimeError("The size of the 3D attn_mask is not correct.")
         else:
-            raise RuntimeError("attn_mask's dimension {} is not supported".format(attn_mask.dim()))
+            raise RuntimeError(f"attn_mask's dimension {attn_mask.dim()} is not supported")
         # attn_mask's dim is 3 now.
 
     # convert ByteTensor key_padding_mask to bool
     if key_padding_mask is not None and key_padding_mask.dtype == torch.uint8:
-        warnings.warn("Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
+        warnings.warn(
+            "Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead."
+        )
         key_padding_mask = key_padding_mask.to(torch.bool)
 
     if bias_k is not None and bias_v is not None:
@@ -588,14 +604,15 @@ def multi_head_attention_forward(query: Tensor,
         k = k.transpose(0, 1)
         v = v.transpose(0, 1)
         if not multi_cat == 0:
-            import pdb; pdb.set_trace()
+            import pdb
+
+            pdb.set_trace()
         else:
             q, k = rope(q, k)
 
         q = q.contiguous().transpose(0, 1)
         k = k.contiguous().transpose(0, 1)
         v = v.contiguous().transpose(0, 1)
-
 
     if static_k is not None:
         assert static_k.size(0) == bsz * num_heads
@@ -622,27 +639,24 @@ def multi_head_attention_forward(query: Tensor,
         if key_padding_mask is not None:
             key_padding_mask = pad(key_padding_mask, (0, 1))
 
-
     attn_output_weights = torch.bmm(q, k.transpose(1, 2))
     assert list(attn_output_weights.size()) == [bsz * num_heads, tgt_len, src_len]
 
     if attn_mask is not None:
         if attn_mask.dtype == torch.bool:
-            attn_output_weights.masked_fill_(attn_mask, float('-inf'))
+            attn_output_weights.masked_fill_(attn_mask, float("-inf"))
         else:
             attn_output_weights += attn_mask
-
 
     if key_padding_mask is not None:
         attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
         attn_output_weights = attn_output_weights.masked_fill(
             key_padding_mask.unsqueeze(1).unsqueeze(2),
-            float('-inf'),
+            float("-inf"),
         )
         attn_output_weights = attn_output_weights.view(bsz * num_heads, tgt_len, src_len)
 
-    attn_output_weights = F.softmax(
-        attn_output_weights, dim=-1)
+    attn_output_weights = F.softmax(attn_output_weights, dim=-1)
     attn_output_weights = F.dropout(attn_output_weights, p=dropout_p, training=training)
 
     attn_output = torch.bmm(attn_output_weights, v)
