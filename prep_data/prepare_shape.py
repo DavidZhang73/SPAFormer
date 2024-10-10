@@ -18,6 +18,7 @@ import trimesh
 from pyquaternion import Quaternion
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
+from tqdm import tqdm
 
 """
     input:
@@ -306,7 +307,11 @@ if __name__ == "__main__":
     root_to_save_file = "../prep_data/shape_data/"
     cat_name = sys.argv[1]
 
-    modes = ["train", "val", "test"]
+    modes = [
+        "train",
+        "val",
+        "test",
+    ]
     levels = [sys.argv[2]]
 
     # import hier imformation
@@ -334,24 +339,13 @@ if __name__ == "__main__":
             )
             object_list = [int(object_json[i]["anno_id"]) for i in range(len(object_json))]
 
-            # for each object:
-            from tqdm import tqdm
+            # HACK: filter out objects with id: 46701 (Storage)
+            object_list = [i for i in object_list if i not in [46701, 47865]]
 
-            for i, fn in tqdm(enumerate(object_list)):
-                print(
-                    "level ",
-                    level,
-                    " mode ",
-                    mode,
-                    "cat:",
-                    cat_name,
-                    " ",
-                    fn,
-                    " is start to convert!",
-                    i,
-                    "/",
-                    len(object_list),
-                )
+            # for each object:
+            bar = tqdm(enumerate(object_list), total=len(object_list))
+            for i, fn in bar:
+                bar.set_description(f"level {level} mode {mode} cat {cat_name} shape {fn}")
 
                 # get information in obj file
                 parts_pcs, Rs, ts, parts_names, sizes = get_shape_info(fn, lev)

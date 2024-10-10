@@ -4,9 +4,20 @@ import math
 import os
 import random
 
+# 设置线程数相关的环境变量
+num_threads = "16"
+os.environ["OMP_NUM_THREADS"] = num_threads
+os.environ["MKL_NUM_THREADS"] = num_threads
+os.environ["GOTO_NUM_THREADS"] = num_threads
+os.environ["NUMEXPR_NUM_THREADS"] = num_threads
+os.environ["OPENBLAS_NUM_THREADS"] = num_threads
+os.environ["MKL_DOMAIN_NUM_THREADS"] = num_threads
+os.environ["VECLIB_MAXIMUM_THREADS"] = num_threads
+
 import ipdb
 import numpy as np
 import torch
+from tqdm import tqdm
 
 
 def qrot(q, v):
@@ -88,7 +99,7 @@ if __name__ == "__main__":
 
     sys.path.append("./")
     cat_name = sys.argv[1]
-    root = sys.argv[2]
+    root = sys.argv[3]
     root_shape = "../prep_data/shape_data/"
     modes = ["val", "train", "test"]
     levels = [sys.argv[2]]
@@ -97,9 +108,10 @@ if __name__ == "__main__":
             object_json = json.load(open(root + "stats/train_val_test_split/" + cat_name + "." + mode + ".json"))
             object_list = [int(object_json[i]["anno_id"]) for i in range(len(object_json))]
             idx = 0
-            for id in object_list:
+            bar = tqdm(object_list)
+            for id in bar:
                 idx += 1
-                print("level", level, " ", mode, " ", id, "      ", idx, "/", len(object_list))
+                bar.set_description(f"Cat: {cat_name}, Level: {level}, Mode: {mode}, Shape: {id}")
                 # if os.path.isfile(root + "contact_points/" + 'pairs_with_contact_points_%s_level' % id + str(level) + '.npy'):
                 if True:
                     cur_data_fn = os.path.join(root_shape, "%s_level" % id + str(level) + ".npy")

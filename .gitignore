@@ -1,5 +1,11 @@
 .ruff_cache
 prep_data/PartNet
+prep_data/partnet_dataset
+prep_data/shape_data
+prep_data/contact_points
+notebooks
+prep_data/pose*
+prep_data/**/*.npy
 
 prepare_data
 checkpoints

@@ -1,4 +1,4 @@
-PATH_TO_PARTNET=$1
+PATH_TO_PARTNET=/home/users/u6921098/projects/SPAFormer/prep_data/partnet_dataset/
 
 # python prepare_shape.py "Bag" 1 $PATH_TO_PARTNET
 # python prepare_shape.py "Bed" 3 $PATH_TO_PARTNET
@@ -18,10 +18,10 @@ PATH_TO_PARTNET=$1
 # python prepare_shape.py "TrashCan" 3 $PATH_TO_PARTNET
 # python prepare_shape.py "Vase" 3 $PATH_TO_PARTNET
 
-python prepare_shape.py "Table" 3 $PATH_TO_PARTNET
-python prepare_shape.py "Chair" 3 $PATH_TO_PARTNET
+python prepare_shape.py "Table" 3 /home/users/u6921098/projects/SPAFormer/prep_data/partnet_dataset/
+python prepare_shape.py "Chair" 3 /home/users/u6921098/projects/SPAFormer/prep_data/partnet_dataset/
 # python prepare_shape.py "Lamp" 3 $PATH_TO_PARTNET
-python prepare_shape.py "StorageFurniture" 3 $PATH_TO_PARTNET
+python prepare_shape.py "StorageFurniture" 3 /home/users/u6921098/projects/SPAFormer/prep_data/partnet_dataset/
 
 # python prepare_shape.py "Microwave" 3 $PATH_TO_PARTNET
 # python prepare_shape.py "Keyboard" 1 $PATH_TO_PARTNET

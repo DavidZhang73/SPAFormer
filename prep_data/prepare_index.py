@@ -301,7 +301,7 @@ if __name__ == "__main__":
     import sys
 
     root_to_load_file = sys.argv[3]
-    root_to_save_file = "../prep_data/index"
+    root_to_save_file = "../prep_data/index/"
 
     cat_name = sys.argv[1]
 

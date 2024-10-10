@@ -9,32 +9,36 @@ filefoldername = "../shape_data"
 #             '../Table_filtered.val.npy', '../Chair_filtered.val.npy', '../Lamp_filtered.val.npy',
 #             '../Table_filtered.test.npy', '../Chair_filtered.test.npy', '../Lamp_filtered.test.npy',]
 cat_names = [
-    "Bag",
-    "Bed",
-    "Bottle",
-    "Bowl",
+    # "Bag",
+    # "Bed",
+    # "Bottle",
+    # "Bowl",
     "Chair",
-    "Clock",
-    "Dishwasher",
-    "Display",
-    "Door",
-    "Earphone",
-    "Faucet",
-    "Hat",
-    "Keyboard",
-    "Knife",
-    "Lamp",
-    "Laptop",
-    "Microwave",
-    "Mug",
+    # "Clock",
+    # "Dishwasher",
+    # "Display",
+    # "Door",
+    # "Earphone",
+    # "Faucet",
+    # "Hat",
+    # "Keyboard",
+    # "Knife",
+    # "Lamp",
+    # "Laptop",
+    # "Microwave",
+    # "Mug",
     "StorageFurniture",
-    "Refrigerator",
-    "Scissors",
-    "TrashCan",
-    "Vase",
+    # "Refrigerator",
+    # "Scissors",
+    # "TrashCan",
+    # "Vase",
     "Table",
 ]
-level = [1, 3, 3, 1, 3, 3, 3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3, 1, 3, 3, 1, 3, 3, 3]
+level = [
+    3,
+    3,
+    3,
+]
 
 data = np.load("./index_2_shape_ids.npy")
 N = len(data)
@@ -68,6 +72,7 @@ with h5py.File("./shapes_all.hdf5", "w") as f:
                 cur_data_fn = os.path.join(
                     "../prep_data", "shape_data/%s_level" % shape_id + str(level[label]) + ".npy"
                 )
+                print(os.path.abspath(cur_data_fn))
                 cur_data = np.load(cur_data_fn, allow_pickle=True).item()  # assume data is stored in seperate .npz file
                 cur_sym = cur_data["sym"]
                 cur_num_part = cur_sym.shape[0]
